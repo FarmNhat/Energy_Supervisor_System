@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
+
 """
-server.py — serve sensor-dashboard tại http://localhost:8080
-Đặt file này cùng thư mục với index.html và sensors.json
+server.py — serve sensor-dashboard http://localhost:8080
 """
 
 import http.server
