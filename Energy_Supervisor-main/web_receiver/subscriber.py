@@ -1,9 +1,16 @@
 import json
+import time
 import paho.mqtt.client as mqtt
 
-BROKER    = "broker.hivemq.com"   # phải trùng với ESP32
+BROKER    = "broker.hivemq.com"
 PORT      = 1883
 TOPIC     = "sensors/data"
+JSON_FILE = "sensors.json"
+
+def write_json(data: dict):
+    data["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    with open(JSON_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
 def on_connect(client, userdata, flags, rc):
     print(f"Connected (rc={rc})")
@@ -12,7 +19,9 @@ def on_connect(client, userdata, flags, rc):
 def on_message(client, userdata, msg):
     try:
         data = json.loads(msg.payload.decode())
-        print(f"[{msg.topic}]  temp={data['temperature']}°C  "
+        write_json(data)
+        print(f"[{data['timestamp']}]  "
+              f"temp={data['temperature']}°C  "
               f"humid={data['humidity']}%  "
               f"light={data['light']}%  "
               f"volt={data['voltage']}V")
