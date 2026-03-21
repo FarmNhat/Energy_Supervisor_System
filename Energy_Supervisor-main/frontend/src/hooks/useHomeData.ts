@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export type DeviceIconType =
 'Tv' |
@@ -149,6 +149,31 @@ const initialDevices: Device[] = [
 
 export function useHomeData() {
   const [devices, setDevices] = useState<Device[]>(initialDevices);
+  const [sensorData, setSensorData] = useState<{
+    temperature: number;
+    humidity: number;
+    light: number;
+    voltage: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const fetchSensorData = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/sensors.json');
+        if (response.ok) {
+          const data = await response.json();
+          setSensorData(data);
+        }
+      } catch (error) {
+        // Silently fail if server isn't running
+      }
+    };
+
+    fetchSensorData();
+    const interval = setInterval(fetchSensorData, 2000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleDevice = (id: string) => {
     setDevices((prev) =>
@@ -212,12 +237,12 @@ export function useHomeData() {
     { name: 'Bedroom', value: 20, color: '#FBBF24' }],
 
     temperature: {
-      current: 72,
+      current: sensorData ? sensorData.temperature : 72,
       target: 70,
       comfortLevel: 'Comfortable'
     },
     lightLevel: {
-      percentage: 65,
+      percentage: sensorData ? sensorData.light : 65,
       timeOfDay: 'Afternoon'
     },
     aiTips: [
