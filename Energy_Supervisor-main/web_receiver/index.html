@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ENERGY SUPERVISE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #080c0a;
+    --surface:   #0e1510;
+    --border:    #1e2e22;
+    --accent:    #39ff85;
+    --accent2:   #00c8ff;
+    --accent3:   #ffb830;
+    --accent4:   #ff4f6d;
+    --muted:     #3a5040;
+    --text:      #d4ead9;
+    --text-dim:  #5a7a62;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* grid noise overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(57,255,133,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(57,255,133,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 48px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(26px, 5vw, 42px);
+    letter-spacing: -1px;
+    color: var(--accent);
+    text-shadow: 0 0 30px rgba(57,255,133,0.35);
+    line-height: 1;
+  }
+
+  .logo span { color: var(--text-dim); font-weight: 400; }
+
+  .status-bar {
+    text-align: right;
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.8;
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-right: 6px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .status-dot.offline { background: var(--accent4); animation: none; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; box-shadow: 0 0 6px var(--accent); }
+    50%      { opacity: 0.4; box-shadow: none; }
+  }
+
+  /* ── CARDS GRID ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 28px 24px 22px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .card:hover { border-color: var(--muted); }
+
+  /* top accent line */
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .card.temp::before   { background: var(--accent4); }
+  .card.humid::before  { background: var(--accent2); }
+  .card.light::before  { background: var(--accent3); }
+  .card.volt::before   { background: var(--accent);  }
+
+  /* corner decoration */
+  .card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; right: 0;
+    width: 40px; height: 40px;
+    border-top: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    opacity: 0.5;
+  }
+
+  .card-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+  }
+
+  .card-value {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(40px, 8vw, 58px);
+    letter-spacing: -2px;
+    line-height: 1;
+    transition: all 0.4s ease;
+  }
+
+  .card.temp  .card-value { color: var(--accent4); }
+  .card.humid .card-value { color: var(--accent2); }
+  .card.light .card-value { color: var(--accent3); }
+  .card.volt  .card-value { color: var(--accent);  }
+
+  .card-unit {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-dim);
+    margin-left: 4px;
+  }
+
+  /* bar indicator */
+  .bar-track {
+    margin-top: 20px;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .card.temp  .bar-fill { background: var(--accent4); }
+  .card.humid .bar-fill { background: var(--accent2); }
+  .card.light .bar-fill { background: var(--accent3); }
+  .card.volt  .bar-fill { background: var(--accent);  }
+
+  /* ── TIMESTAMP ROW ── */
+  .meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .meta-ts { font-family: 'Space Mono', monospace; }
+  .meta-refresh { letter-spacing: 2px; text-transform: uppercase; }
+
+  /* ── FLASH on update ── */
+  @keyframes flash {
+    0%   { background: rgba(57,255,133,0.08); }
+    100% { background: var(--surface); }
+  }
+  .card.updated { animation: flash 0.6s ease-out forwards; }
+
+  /* ── ERROR state ── */
+  #error-banner {
+    display: none;
+    padding: 12px 18px;
+    background: rgba(255,79,109,0.1);
+    border: 1px solid var(--accent4);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--accent4);
+    margin-bottom: 16px;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <header>
+    <div class="logo">ENV<span>/</span>MONITOR</div>
+    <div class="status-bar">
+      <div><span class="status-dot" id="dot"></span><span id="status-text">CONNECTING...</span></div>
+      <div id="update-count">— updates</div>
+    </div>
+  </header>
+
+  <div id="error-banner">⚠ Không đọc được sensors.json — kiểm tra server đang chạy.</div>
+
+  <div class="grid">
+    <div class="card temp">
+      <div class="card-label">Nhiệt độ</div>
+      <div class="card-value" id="val-temp">--<span class="card-unit">°C</span></div>
+      <div class="bar-track"><div class="bar-fill" id="bar-temp" style="width:0%"></div></div>
+    </div>
+
+    <div class="card humid">
+      <div class="card-label">Độ ẩm</div>
+      <div class="card-value" id="val-humid">--<span class="card-unit">%</span></div>
+      <div class="bar-track"><div class="bar-fill" id="bar-humid" style="width:0%"></div></div>
+    </div>
+
+    <div class="card light">
+      <div class="card-label">Ánh sáng</div>
+      <div class="card-value" id="val-light">--<span class="card-unit">%</span></div>
+      <div class="bar-track"><div class="bar-fill" id="bar-light" style="width:0%"></div></div>
+    </div>
+
+    <div class="card volt">
+      <div class="card-label">Điện áp</div>
+      <div class="card-value" id="val-volt">--<span class="card-unit">V</span></div>
+      <div class="bar-track"><div class="bar-fill" id="bar-volt" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="meta">
+    <div class="meta-ts">Cập nhật lúc: <span id="ts">--</span></div>
+    <div class="meta-refresh">⟳ tự động mỗi 2s</div>
+  </div>
+
+</div>
+
+<script>
+  let updateCount = 0;
+  let prevData = {};
+
+  function set(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.firstChild.textContent = text;
+  }
+
+  function setBar(id, pct) {
+    const el = document.getElementById(id);
+    if (el) el.style.width = Math.min(100, Math.max(0, pct)) + '%';
+  }
+
+  function flashCard(cls) {
+    const el = document.querySelector('.card.' + cls);
+    if (!el) return;
+    el.classList.remove('updated');
+    void el.offsetWidth;
+    el.classList.add('updated');
+  }
+
+  async function fetchData() {
+    try {
+      const res = await fetch('sensors.json?t=' + Date.now());
+      if (!res.ok) throw new Error(res.status);
+      const d = await res.json();
+
+      document.getElementById('error-banner').style.display = 'none';
+      document.getElementById('dot').className = 'status-dot';
+      document.getElementById('status-text').textContent = 'LIVE';
+
+      // temp (range 0–50°C)
+      if (d.temperature !== prevData.temperature) {
+        set('val-temp', d.temperature.toFixed(1));
+        setBar('bar-temp', (d.temperature / 50) * 100);
+        flashCard('temp');
+      }
+      // humid (0–100%)
+      if (d.humidity !== prevData.humidity) {
+        set('val-humid', d.humidity.toFixed(1));
+        setBar('bar-humid', d.humidity);
+        flashCard('humid');
+      }
+      // light (0–100%)
+      if (d.light !== prevData.light) {
+        set('val-light', d.light.toFixed(1));
+        setBar('bar-light', d.light);
+        flashCard('light');
+      }
+      // volt (0–5V)
+      if (d.voltage !== prevData.voltage) {
+        set('val-volt', d.voltage.toFixed(2));
+        setBar('bar-volt', (d.voltage / 5) * 100);
+        flashCard('volt');
+      }
+
+      document.getElementById('ts').textContent = d.timestamp || new Date().toLocaleTimeString('vi-VN');
+      updateCount++;
+      document.getElementById('update-count').textContent = updateCount + ' updates';
+      prevData = d;
+
+    } catch (e) {
+      document.getElementById('error-banner').style.display = 'block';
+      document.getElementById('dot').className = 'status-dot offline';
+      document.getElementById('status-text').textContent = 'OFFLINE';
+    }
+  }
+
+  fetchData();
+  setInterval(fetchData, 2000);
+</script>
+</body>
+</html>
