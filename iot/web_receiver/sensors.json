@@ -1,7 +1,8 @@
 {
-  "temperature": 69.3,
-  "humidity": 47.3,
-  "light": 72.0,
-  "voltage": 3.3,
-  "timestamp": "2026-03-21 08:19:49"
+  "temperature": 23.1,
+  "humidity": 50.7,
+  "light": 44.1,
+  "voltage": 2.91,
+  "timestamp": "2026-03-22 15:24:42",
+  "scenario": "voltage_drop"
 }

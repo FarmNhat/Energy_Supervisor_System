@@ -7,7 +7,7 @@ interface LoginPageProps {
 }
 export function LoginPage({ onNavigateToRegister }: LoginPageProps) {
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -16,9 +16,9 @@ export function LoginPage({ onNavigateToRegister }: LoginPageProps) {
     setIsLoading(true);
     setError('');
     try {
-      await login(email, password);
+      await login(username, password);
     } catch (err) {
-      setError('Invalid email or password. Please try again.');
+      setError(err instanceof Error ? err.message : 'Login failed.');
     } finally {
       setIsLoading(false);
     }
@@ -46,10 +46,10 @@ export function LoginPage({ onNavigateToRegister }: LoginPageProps) {
             <Home className="w-8 h-8" />
           </div>
           <h1 className="text-2xl font-heading font-bold text-gray-900 mb-2">
-            Welcome Home
+            Operator Login
           </h1>
           <p className="text-gray-500 text-center">
-            Sign in to your smart home dashboard
+            Sign in to the Energy Supervisor dashboard
           </p>
         </div>
 
@@ -74,18 +74,18 @@ export function LoginPage({ onNavigateToRegister }: LoginPageProps) {
           <div>
             <label
               className="block text-sm font-medium text-gray-700 mb-1.5"
-              htmlFor="email">
+              htmlFor="username">
 
-              Email Address
+              Username
             </label>
             <input
-              id="email"
-              type="email"
+              id="username"
+              type="text"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="w-full rounded-xl border border-cream-300 bg-white px-4 py-2.5 text-gray-900 focus:border-warmgreen-400 focus:ring-2 focus:ring-warmgreen-200 outline-none transition-all"
-              placeholder="you@example.com" />
+              placeholder="operator" />
 
           </div>
 

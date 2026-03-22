@@ -8,10 +8,11 @@ interface RegisterPageProps {
 export function RegisterPage({ onNavigateToLogin }: RegisterPageProps) {
   const { register } = useAuth();
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const calculateStrength = (pass: string) => {
     if (!pass) return 0;
     let score = 0;
@@ -23,10 +24,16 @@ export function RegisterPage({ onNavigateToLogin }: RegisterPageProps) {
   const strength = calculateStrength(password);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirmPassword) return;
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
     setIsLoading(true);
+    setError('');
     try {
-      await register(name, email, password);
+      await register(name, username, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed.');
     } finally {
       setIsLoading(false);
     }
@@ -54,12 +61,28 @@ export function RegisterPage({ onNavigateToLogin }: RegisterPageProps) {
             <Home className="w-8 h-8" />
           </div>
           <h1 className="text-2xl font-heading font-bold text-gray-900 mb-2">
-            Create Your Home
+            Create Operator Account
           </h1>
           <p className="text-gray-500 text-center">
-            Set up your smart home account
+            Register a new console operator
           </p>
         </div>
+
+        {error &&
+        <motion.div
+          initial={{
+            opacity: 0,
+            height: 0
+          }}
+          animate={{
+            opacity: 1,
+            height: 'auto'
+          }}
+          className="mb-6 rounded-xl bg-coral-50 p-4 text-sm font-medium text-coral-600">
+
+            {error}
+          </motion.div>
+        }
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
@@ -83,18 +106,18 @@ export function RegisterPage({ onNavigateToLogin }: RegisterPageProps) {
           <div>
             <label
               className="block text-sm font-medium text-gray-700 mb-1.5"
-              htmlFor="email">
+              htmlFor="username">
 
-              Email Address
+              Username
             </label>
             <input
-              id="email"
-              type="email"
+              id="username"
+              type="text"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="w-full rounded-xl border border-cream-300 bg-white px-4 py-2.5 text-gray-900 focus:border-warmgreen-400 focus:ring-2 focus:ring-warmgreen-200 outline-none transition-all"
-              placeholder="you@example.com" />
+              placeholder="operator2" />
 
           </div>
 

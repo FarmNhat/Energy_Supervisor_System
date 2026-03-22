@@ -1,53 +1,24 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Header } from '../components/Header';
-import { EnergyOverview } from '../components/EnergyOverview';
-import { RoomSection } from '../components/RoomSection';
-import { AiTips } from '../components/AiTips';
+import { SensorCard } from '../components/SensorCard';
 import { useHomeData } from '../hooks/useHomeData';
+
 export function DashboardPage() {
-  const { data, toggleDevice } = useHomeData();
+  const { data } = useHomeData();
+
   return (
     <motion.div
-      initial={{
-        opacity: 0,
-        y: 10
-      }}
-      animate={{
-        opacity: 1,
-        y: 0
-      }}
-      exit={{
-        opacity: 0,
-        y: -10
-      }}
-      transition={{
-        duration: 0.3
-      }}
-      className="max-w-6xl mx-auto px-4 py-6 md:py-8">
-
-      <Header
-        homeName={data.homeName}
-        monthlyCost={data.monthlyCost}
-        costTrend={data.costTrend}
-        currentDate={data.currentDate} />
-
-
-      <EnergyOverview data={data} />
-
-      <div className="space-y-2 mt-10">
-        {data.rooms.map((room) =>
-        <RoomSection
-          key={room.id}
-          room={room}
-          onToggleDevice={toggleDevice} />
-
-        )}
-      </div>
-
-      <div className="mt-12">
-        <AiTips tips={data.aiTips} />
-      </div>
-    </motion.div>);
-
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.3 }}
+      className="mx-auto max-w-6xl px-4 py-6 md:py-8"
+    >
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {data.sensors.map((sensor, index) => (
+          <SensorCard key={sensor.id} sensor={sensor} delay={0.05 * (index + 1)} />
+        ))}
+      </section>
+    </motion.div>
+  );
 }

@@ -9,3 +9,24 @@ node_modules/
 # Credentials (WiFi and MQTT)
 iot/include/credentials.h
 
+.venv/*
+.venv-backend/*
+.venv-frontend/*
+.venv-iot/*
+
+# Virtual Environments
+.venv/
+venv/
+env/
+
+# Python Cache (Recursive)
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+
+# Databases
+*.db
+*.sqlite3
+
+# Tests (Note: Usually tests are kept in Git, but removing as requested)
+tests/

@@ -7,6 +7,7 @@ import { DeviceManagementPage } from './pages/DeviceManagementPage';
 import { SessionManagementPage } from './pages/SessionManagementPage';
 import { EnergyDashboardPage } from './pages/EnergyDashboardPage';
 import { AppShell } from './components/AppShell';
+import { HomeDataProvider } from './hooks/useHomeData';
 type Page = 'dashboard' | 'devices' | 'sessions' | 'energy';
 type AuthMode = 'login' | 'register';
 function AppRouter() {
@@ -32,7 +33,9 @@ function AppRouter() {
 export function App() {
   return (
     <AuthProvider>
-      <AppRouter />
+      <HomeDataProvider>
+        <AppRouter />
+      </HomeDataProvider>
     </AuthProvider>);
 
 }
