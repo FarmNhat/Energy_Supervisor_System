@@ -4,7 +4,7 @@ import json
 import random
 
 BROKER = "broker.hivemq.com"
-TOPIC = "farmnhat/energy_supervisor/sensors"
+TOPIC = "sensors/data"
 
 print(f"Starting mock device. Publishing to {TOPIC} on {BROKER}...")
 
