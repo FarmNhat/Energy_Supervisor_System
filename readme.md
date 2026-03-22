@@ -32,7 +32,9 @@ Default seeded operator:
 - Username: `operator`
 - Password: `operator123`
 
-## 2. Start IoT 
+## 2. Start IoT
+
+### Linux / macOS
 
 Install the IoT Python dependency once with `uv`:
 
@@ -61,6 +63,38 @@ Publish mock sensor data:
 cd iot/web_receiver
 BROKER=localhost TOPIC=sensors/data uv run --python ../../.venv-iot/bin/python mock_device.py
 ```
+
+### Windows (PowerShell)
+
+Ensure you have `uv` installed (`pip install uv`). Install the IoT dependencies:
+
+```powershell
+uv venv .venv-iot
+uv pip install --python .venv-iot/Scripts/python.exe -r iot/requirements.txt
+```
+
+Start the MQTT-to-JSON bridge:
+
+```powershell
+cd iot/web_receiver
+$env:BROKER="localhost"; $env:PORT="1883"; $env:TOPIC="sensors/data"; uv run --python ../../.venv-iot/Scripts/python.exe json_gen.py
+```
+
+Serve the fallback JSON endpoint:
+
+```powershell
+cd iot/web_receiver
+uv run --python ../../.venv-iot/Scripts/python.exe server.py
+```
+
+Publish mock sensor data:
+
+```powershell
+cd iot/web_receiver
+$env:BROKER="localhost"; $env:TOPIC="sensors/data"; uv run --python ../../.venv-iot/Scripts/python.exe mock_device.py
+```
+
+---
 
 The fallback receiver is then available at `http://localhost:8080/sensors.json`.
 
@@ -110,6 +144,8 @@ curl -X PUT http://localhost:8000/api/config/current \
 
 ## Local Verification
 
+### Linux / macOS
+
 Backend:
 
 ```bash
@@ -118,6 +154,19 @@ uv pip install --python backend/.venv/bin/python -r backend/requirements.txt
 uv run --python backend/.venv/bin/python backend/scripts/smoke_test.py
 uv run --python backend/.venv/bin/python backend/scripts/verify_backend.py
 ```
+
+### Windows (PowerShell)
+
+Backend:
+
+```powershell
+uv venv backend/.venv
+uv pip install --python backend/.venv/Scripts/python.exe -r backend/requirements.txt
+uv run --python backend/.venv/Scripts/python.exe backend/scripts/smoke_test.py
+uv run --python backend/.venv/Scripts/python.exe backend/scripts/verify_backend.py
+```
+
+---
 
 Frontend:
 
