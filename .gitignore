@@ -7,5 +7,5 @@
 node_modules/
 
 # Credentials (WiFi and MQTT)
-include/credentials.h
+iot/include/credentials.h
 
