@@ -23,7 +23,7 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg://energy:energy@db:5432/energy_supervisor
-      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_HOST: broker.hivemq.com
       MQTT_BROKER_PORT: 1883
       MQTT_TOPIC: sensors/data
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
