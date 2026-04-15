@@ -17,6 +17,10 @@ extern float glob_humid;
 extern float glob_light;
 extern float glob_volt;
 
+extern int device1;
+extern int device2;
+extern int device3;
+
 extern SemaphoreHandle_t xSensorMutex;
 extern SemaphoreHandle_t xSerialMutex;
 extern SemaphoreHandle_t xMqttMutex;

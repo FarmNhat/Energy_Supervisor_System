@@ -48,6 +48,14 @@ void monitor_update(void *pvParameter)
             Serial.print(current_volt);
             Serial.println("(V)");
 
+            Serial.print("dev1: ");
+            Serial.print(device1);
+            Serial.print(" dev2: ");
+            Serial.print(device2);
+            Serial.print(" dev3: ");
+            Serial.println(device3);
+            
+
             Serial.print("\n");
             xSemaphoreGive(xSerialMutex);
         }

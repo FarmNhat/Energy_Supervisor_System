@@ -2,18 +2,12 @@
 
 static LiquidCrystal_I2C lcd(LCD_I2C_ADDR, LCD_COLS, LCD_ROWS);
 
-// 3 trang hiển thị, mỗi trang 2 dòng, xoay vòng mỗi 2 giây
-// Trang 0: Temp  + Humid
-// Trang 1: Light + Volt
-// Trang 2: IP / trạng thái WiFi (dự phòng mở rộng)
-
 void task_LCD(void *pvParameter)
 {
     Wire.begin(LCD_SDA_PIN, LCD_SCL_PIN);
     lcd.init();
     lcd.backlight();
 
-    // Màn hình chào
     lcd.setCursor(2, 0);
     lcd.print("ENV MONITOR");
     lcd.setCursor(3, 1);
@@ -26,9 +20,9 @@ void task_LCD(void *pvParameter)
     float current_light = 0;
     float current_volt  = 0;
 
-    uint8_t page = 0;       // trang hiện tại: 0 hoặc 1
-    char row0[17];          // buffer dòng trên  (16 ký tự + null)
-    char row1[17];          // buffer dòng dưới
+    uint8_t page = 0;       
+    char row0[17];
+    char row1[17];
 
     while (1)
     {
@@ -43,45 +37,54 @@ void task_LCD(void *pvParameter)
             xSemaphoreGive(xSensorMutex);
         }
 
-        // --- Build nội dung theo trang ---
+        // --- Build nội dung ---
         if (page == 0)
         {
-            // Dòng 0: Temp
+            // Temp
             if (isnan(current_temp))
                 snprintf(row0, sizeof(row0), "Temp: ERR       ");
             else
                 snprintf(row0, sizeof(row0), "Temp: %5.1f %cC   ", current_temp, 0xDF);
 
-            // Dòng 1: Humid
+            // Humid
             if (isnan(current_humid))
                 snprintf(row1, sizeof(row1), "Humid: ERR      ");
             else
                 snprintf(row1, sizeof(row1), "Humid: %5.1f %%  ", current_humid);
         }
-        else
+        else if (page == 1)
         {
-            // Dòng 0: Light
+            // Light
             if (isnan(current_light))
                 snprintf(row0, sizeof(row0), "Light: ERR      ");
             else
                 snprintf(row0, sizeof(row0), "Light: %5.1f %%  ", current_light);
 
-            // Dòng 1: Volt
+            // Volt
             snprintf(row1, sizeof(row1), "Volt:  %5.2f V  ", current_volt);
         }
+        else if (page == 2)
+        {
+            // Device status
 
-        // --- Ghi lên LCD ---
+            snprintf(row0, sizeof(row0),
+                "D1:%-3s D2:%-3s  ",
+                device1 ? "ON" : "OFF",
+                device2 ? "ON" : "OFF");
+
+            snprintf(row1, sizeof(row1),
+                "D3:%-3s        ",   
+                device3 ? "ON" : "OFF");
+        }
+
+        // --- Ghi LCD ---
         lcd.setCursor(0, 0);
         lcd.print(row0);
         lcd.setCursor(0, 1);
         lcd.print(row1);
 
         // --- Chuyển trang ---
-        page = (page + 1) % 2;
-
+        page = (page + 1) % 3;   
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
-
-
-    
 }
