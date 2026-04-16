@@ -1,23 +1,37 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class AuthRequest(BaseModel):
+class UserBase(BaseModel):
     username: str
+
+
+class UserCreate(UserBase):
     password: str
 
 
-class UserRead(BaseModel):
+class UserLogin(UserBase):
+    password: str
+
+
+class AuthRequest(UserBase):
+    password: str
+
+
+class UserRead(UserBase):
+    model_config = ConfigDict(from_attributes=True)
     user_id: int
-    username: str
-    created_at: str | None = None
+    created_at: datetime | None = None
 
 
-class AuthResponse(BaseModel):
+class LoginResponse(BaseModel):
     access_token: str
     user: UserRead
+
+
+AuthResponse = LoginResponse
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -27,12 +41,21 @@ class ConfigUpdateRequest(BaseModel):
 
 
 class TelemetryIngestRequest(BaseModel):
-    temperature: float
-    humidity: float
-    light: float
-    voltage: float
+    temperature: float | None = None
+    humidity: float | None = None
+    light: float | None = None
+    voltage: float | None = None
     timestamp: str | None = None
     scenario: str | None = None
+    sensor_enabled: dict[str, bool | int | str] | None = None
+    enabled_sensors: list[str] | None = None
+    disabled_sensors: list[str] | None = None
+
+
+class DeviceControlRequest(BaseModel):
+    device1: int | None = Field(default=None, ge=0, le=1)
+    device2: int | None = Field(default=None, ge=0, le=1)
+    device3: int | None = Field(default=None, ge=0, le=1)
 
 
 class HealthResponse(BaseModel):

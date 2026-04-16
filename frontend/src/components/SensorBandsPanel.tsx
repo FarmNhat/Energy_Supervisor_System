@@ -1,6 +1,7 @@
 import React from 'react';
-import { ActivitySquare, ScanSearch } from 'lucide-react';
+import { ActivitySquare } from 'lucide-react';
 import { SensorCardData, SensorKind, SensorSeverity } from '../hooks/useHomeData';
+import { SensorTargetInput } from './SensorTargetInput';
 
 interface SensorBandsPanelProps {
   sensors: SensorCardData[];
@@ -51,7 +52,6 @@ export function SensorBandsPanel({ sensors }: SensorBandsPanelProps) {
                     {sensor.statusLabel}
                   </span>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-gray-600">{sensor.helperText}</p>
               </div>
 
               <div className="text-left md:text-right">
@@ -59,7 +59,9 @@ export function SensorBandsPanel({ sensors }: SensorBandsPanelProps) {
                   {sensor.displayValue}
                   <span className="ml-1 text-base font-semibold text-gray-500">{sensor.unit}</span>
                 </p>
-                <p className="mt-1 text-sm font-medium text-gray-500">{sensor.rangeLabel}</p>
+                <div className="mt-2">
+                  <SensorTargetInput sensor={sensor} compact />
+                </div>
               </div>
             </div>
 

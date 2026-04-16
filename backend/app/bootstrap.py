@@ -14,6 +14,14 @@ DEFAULT_RULES = {
     "voltage": {"min": 3.0, "max": 3.6, "unit": "V"},
 }
 
+
+def default_rules_copy() -> dict[str, dict[str, float | str]]:
+    return {
+        metric_key: dict(metric_rules)
+        for metric_key, metric_rules in DEFAULT_RULES.items()
+    }
+
+
 def seed_default_data(session: Session) -> None:
     settings = get_settings()
     user_repo = UserRepository(session)
@@ -32,10 +40,13 @@ def seed_default_data(session: Session) -> None:
             user_id=user.user_id,
             overload_enabled=True,
             threshold_w=1800.0,
-            automation_rules_json=DEFAULT_RULES,
+            automation_rules_json=default_rules_copy(),
         )
         session.add(config)
         session.flush()
+    else:
+        config.automation_rules_json = default_rules_copy()
+        session.add(config)
 
     existing_assets = {asset.hw_address for asset in asset_repo.list_all()}
     defaults = [

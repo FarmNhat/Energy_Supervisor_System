@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Activity, Droplets, SunMedium, Thermometer } from 'lucide-react';
 import { SensorCardData, SensorKind, SensorSeverity } from '../hooks/useHomeData';
+import { SensorTargetInput } from './SensorTargetInput';
 
 interface SensorCardProps {
   sensor: SensorCardData;
@@ -86,7 +87,9 @@ export function SensorCard({ sensor, delay = 0 }: SensorCardProps) {
             {sensor.displayValue}
             <span className="ml-1 text-xl font-semibold text-gray-500">{sensor.unit}</span>
           </p>
-          <p className="mt-3 text-sm font-medium text-gray-500">{sensor.rangeLabel}</p>
+          <div className="mt-3">
+            <SensorTargetInput sensor={sensor} />
+          </div>
         </div>
         <span
           className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${severityClassNames[sensor.severity]}`}
@@ -104,7 +107,6 @@ export function SensorCard({ sensor, delay = 0 }: SensorCardProps) {
             className={`h-full rounded-full ${theme.fillClassName}`}
           />
         </div>
-        <p className="mt-3 text-sm leading-6 text-gray-600">{sensor.helperText}</p>
       </div>
     </motion.article>
   );

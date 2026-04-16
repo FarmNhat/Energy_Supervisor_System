@@ -11,20 +11,20 @@ interface TelemetryCalculatorPanelProps {
 type TargetKey = 'temperature' | 'humidity' | 'light' | 'voltage';
 
 interface TargetState {
-  temperature: number;
-  humidity: number;
-  light: number;
-  voltage: number;
+  temperature: string;
+  humidity: string;
+  light: string;
+  voltage: string;
 }
 
 const buildDefaultTargets = (
   temperatureUnit: TelemetryCalculatorPanelProps['temperatureUnit'],
   voltageMode: TelemetryCalculatorPanelProps['voltageMode'],
 ): TargetState => ({
-  temperature: temperatureUnit === '°F' ? 72 : 22,
-  humidity: 50,
-  light: 60,
-  voltage: voltageMode === 'raw_adc' ? 2048 : 3.3,
+  temperature: temperatureUnit === '°F' ? '72' : '22',
+  humidity: '50',
+  light: '60',
+  voltage: voltageMode === 'raw_adc' ? '2048' : '3.3',
 });
 
 const tolerances = {
@@ -61,6 +61,11 @@ function formatReading(
   return `${value.toFixed(2)}V`;
 }
 
+function parseTargetValue(value: string) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export function TelemetryCalculatorPanel({
   latestSnapshot,
   temperatureUnit,
@@ -76,7 +81,7 @@ export function TelemetryCalculatorPanel({
         id: 'temperature' as const,
         label: 'Temperature',
         live: latestSnapshot.temperature,
-        target: targets.temperature,
+        target: parseTargetValue(targets.temperature),
         tolerance:
           temperatureUnit === '°F'
             ? tolerances.temperature.fahrenheit
@@ -86,21 +91,21 @@ export function TelemetryCalculatorPanel({
         id: 'humidity' as const,
         label: 'Humidity',
         live: latestSnapshot.humidity,
-        target: targets.humidity,
+        target: parseTargetValue(targets.humidity),
         tolerance: tolerances.humidity,
       },
       {
         id: 'light' as const,
         label: 'Light',
         live: latestSnapshot.light,
-        target: targets.light,
+        target: parseTargetValue(targets.light),
         tolerance: tolerances.light,
       },
       {
         id: 'voltage' as const,
         label: voltageMode === 'raw_adc' ? 'Voltage Feed' : 'Voltage',
         live: latestSnapshot.voltage,
-        target: targets.voltage,
+        target: parseTargetValue(targets.voltage),
         tolerance:
           voltageMode === 'raw_adc' ? tolerances.voltage.raw_adc : tolerances.voltage.volts,
       },
@@ -113,7 +118,7 @@ export function TelemetryCalculatorPanel({
         ...row,
         drift,
         withinBand,
-        status: withinBand ? 'Aligned' : drift > 0 ? 'Above target' : 'Below target',
+        status: withinBand ? 'Aligned' : drift > 0 ? 'Above range' : 'Below range',
       };
     });
   }, [latestSnapshot, targets, temperatureUnit, voltageMode]);
@@ -121,10 +126,9 @@ export function TelemetryCalculatorPanel({
   const alignedCount = rows.filter((row) => row.withinBand).length;
 
   const updateTarget = (key: TargetKey, nextValue: string) => {
-    const parsed = Number.parseFloat(nextValue);
     setTargets((previous) => ({
       ...previous,
-      [key]: Number.isFinite(parsed) ? parsed : 0,
+      [key]: nextValue,
     }));
   };
 
@@ -188,7 +192,7 @@ export function TelemetryCalculatorPanel({
 
         <label className="rounded-[24px] border border-cream-200 bg-cream-50/80 p-4">
           <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
-            {voltageMode === 'raw_adc' ? 'Voltage ADC target' : 'Voltage target'}
+            {voltageMode === 'raw_adc' ? 'Voltage ADC range' : 'Voltage target'}
           </span>
           <input
             type="number"
@@ -219,7 +223,7 @@ export function TelemetryCalculatorPanel({
             <div>
               <h3 className="font-heading text-lg font-bold text-gray-950">{row.label}</h3>
               <p className="mt-1 text-sm text-gray-600">
-                Live {formatReading(row.id, row.live, temperatureUnit, voltageMode)} against target{' '}
+                Live {formatReading(row.id, row.live, temperatureUnit, voltageMode)} against range{' '}
                 {formatReading(row.id, row.target, temperatureUnit, voltageMode)}
               </p>
             </div>

@@ -20,7 +20,7 @@ interface AppShellProps {
 
 export function AppShell({ children, currentPage, onNavigate }: AppShellProps) {
   const { currentUser, logout } = useAuth();
-  const { data, sensorTransport } = useHomeData();
+  const { data } = useHomeData();
 
   const navItems = [
     {
@@ -45,13 +45,6 @@ export function AppShell({ children, currentPage, onNavigate }: AppShellProps) {
     },
   ] as const;
 
-  const statusClasses =
-    data.sensorSummary.state === 'live'
-      ? 'bg-warmgreen-400 shadow-[0_0_12px_rgba(122,184,147,0.85)]'
-      : data.sensorSummary.state === 'stale'
-        ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.75)]'
-        : 'bg-coral-400 shadow-[0_0_12px_rgba(240,138,129,0.75)]';
-
   return (
     <div className="min-h-screen bg-transparent text-gray-900 font-body selection:bg-warmgreen-200 selection:text-gray-950 md:grid md:grid-cols-[18rem_minmax(0,1fr)]">
       <aside className="hidden min-h-screen border-r border-gray-950/10 bg-gray-950 text-white md:flex md:flex-col">
@@ -66,21 +59,6 @@ export function AppShell({ children, currentPage, onNavigate }: AppShellProps) {
             <div>
               <p className="text-[11px] uppercase tracking-[0.24em] text-gray-400">IoT Console</p>
               <h1 className="font-heading text-xl font-extrabold text-white">Energy Supervisor</h1>
-            </div>
-          </div>
-
-          <div className="relative mt-6 rounded-[24px] border border-white/10 bg-white/5 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.22em] text-gray-500">Receiver</p>
-                <p className="mt-2 text-sm font-semibold text-white">{data.sensorSummary.headline}</p>
-              </div>
-              <span className={`h-3 w-3 rounded-full ${statusClasses}`} />
-            </div>
-            <div className="mt-4 space-y-2 text-xs text-gray-400">
-              <p>{data.sensorSummary.freshnessLabel}</p>
-              <p>Topic: {sensorTransport.topic}</p>
-              <p>Poll: {sensorTransport.pollIntervalSeconds}s</p>
             </div>
           </div>
         </div>

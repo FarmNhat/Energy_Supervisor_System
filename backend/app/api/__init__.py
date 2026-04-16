@@ -11,9 +11,9 @@ from ..core.settings import get_settings
 from ..db import SessionLocal, get_db
 from ..realtime import build_realtime_message, connection_manager
 from ..repositories import UserRepository
-from ..schemas import AuthRequest, AuthResponse, ConfigUpdateRequest, HealthResponse, TelemetryIngestRequest, UserRead
+from ..schemas import AuthRequest, AuthResponse, ConfigUpdateRequest, DeviceControlRequest, HealthResponse, TelemetryIngestRequest, UserRead
 from ..security import hash_password, issue_access_token, verify_password
-from ..services import DashboardService, TelemetryService
+from ..services import DashboardService, DeviceControlService, TelemetryService
 
 settings = get_settings()
 
@@ -98,6 +98,26 @@ def assets(session: Session = Depends(get_db)) -> dict:
 @api_router.get("/alerts/recent")
 def recent_alerts(limit: int = Query(10, ge=1, le=100), session: Session = Depends(get_db)) -> dict:
     return DashboardService.recent_alerts(session, limit=limit)
+
+
+@api_router.get("/config/current")
+def current_config(session: Session = Depends(get_db)) -> dict:
+    return DashboardService.current_config(session)
+
+
+@api_router.get("/control/devices")
+def get_device_control() -> dict:
+    return DeviceControlService.read_state()
+
+
+@api_router.put("/control/devices")
+def update_device_control(payload: DeviceControlRequest) -> dict:
+    return DeviceControlService.update_state(payload.model_dump(exclude_none=True))
+
+
+@api_router.post("/control/devices")
+def post_device_control(payload: DeviceControlRequest) -> dict:
+    return DeviceControlService.update_state(payload.model_dump(exclude_none=True))
 
 
 @api_router.post("/telemetry/ingest")

@@ -1,7 +1,15 @@
 {
-  "temperature": 28.1,
-  "humidity": 51.8,
-  "light": 57.0,
-  "voltage": 0.0,
-  "timestamp": "2026-04-15 23:07:33"
+  "timestamp": "2026-04-16T21:33:26",
+  "scenario": "critical_event",
+  "sensor_enabled": {
+    "temperature": true,
+    "humidity": true,
+    "light": true,
+    "voltage": true
+  },
+  "disabled_sensors": [],
+  "temperature": 32.3,
+  "humidity": 75.5,
+  "light": 97.0,
+  "voltage": 3.84
 }

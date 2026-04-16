@@ -4,9 +4,19 @@ import json
 import random
 import os
 
-BROKER = os.getenv("BROKER", "broker.hivemq.com")
+# Configuration from environment variables
+# MOCK: Defaults to localhost for local Mosquitto
+# REAL: Set BROKER=broker.hivemq.com to test against external broker
+BROKER = os.getenv("BROKER", "localhost")
 TOPIC = os.getenv("TOPIC", "sensors/data")
 INTERVAL_SECONDS = float(os.getenv("INTERVAL_SECONDS", "2"))
+DISABLED_SENSORS = {
+    item.strip().lower()
+    for item in os.getenv("MOCK_DISABLED_SENSORS", "").split(",")
+    if item.strip()
+}
+ROTATE_DISABLED = os.getenv("MOCK_ROTATE_DISABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+SENSOR_KEYS = ("temperature", "humidity", "light", "voltage")
 
 SCENARIOS = [
     {
@@ -57,19 +67,43 @@ SCENARIOS = [
 def sample_metric(bounds):
     return round(random.uniform(bounds[0], bounds[1]), 1)
 
+def disabled_for_tick(tick):
+    disabled = set(DISABLED_SENSORS)
+    if ROTATE_DISABLED:
+        disabled.add(SENSOR_KEYS[tick % len(SENSOR_KEYS)])
+    return disabled
+
 print(f"Starting mock device. Publishing to {TOPIC} on {BROKER}...")
+if DISABLED_SENSORS:
+    print(f"Static disabled sensors: {', '.join(sorted(DISABLED_SENSORS))}")
+if ROTATE_DISABLED:
+    print("Rotating disabled sensor mode is enabled.")
 
 tick = 0
 while True:
     scenario = SCENARIOS[tick % len(SCENARIOS)]
-    data = {
+    disabled_sensors = disabled_for_tick(tick)
+    sensor_enabled = {
+        sensor_key: sensor_key not in disabled_sensors
+        for sensor_key in SENSOR_KEYS
+    }
+    readings = {
         "temperature": sample_metric(scenario["temperature"]),
         "humidity": sample_metric(scenario["humidity"]),
         "light": sample_metric(scenario["light"]),
         "voltage": round(random.uniform(scenario["voltage"][0], scenario["voltage"][1]), 2),
+    }
+    data = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "scenario": scenario["name"],
+        "sensor_enabled": sensor_enabled,
+        "disabled_sensors": sorted(disabled_sensors),
     }
+    data.update({
+        sensor_key: value
+        for sensor_key, value in readings.items()
+        if sensor_enabled[sensor_key]
+    })
 
     payload = json.dumps(data)
     print(f"Publishing {scenario['name']}: {payload}")

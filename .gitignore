@@ -30,3 +30,4 @@ env/
 
 # Tests (Note: Usually tests are kept in Git, but removing as requested)
 tests/
+.codex

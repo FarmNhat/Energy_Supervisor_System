@@ -12,8 +12,10 @@ class Settings(BaseSettings):
     mqtt_broker_host: str = "broker.hivemq.com"
     mqtt_broker_port: int = 1883
     mqtt_topic: str = "sensors/data"
+    mqtt_control_topic: str = "devices/control"
     mqtt_client_id: str = "energy-supervisor-backend"
     mqtt_keepalive: int = 60
+    device_control_file: str = "iot/web_receiver/input.json"
     poll_interval_seconds: int = 2
     alert_stale_after_seconds: int = 10
     seed_username: str = "operator"

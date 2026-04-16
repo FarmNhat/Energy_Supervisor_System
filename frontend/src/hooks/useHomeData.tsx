@@ -54,6 +54,8 @@ export interface SensorCardData {
   fillPercent: number;
   severity: SensorSeverity;
   sourceLabel: string;
+  deviceLabel?: string;
+  enabled?: boolean;
 }
 
 export interface SensorSummary {
@@ -95,6 +97,7 @@ export interface SensorSnapshot {
   light: number;
   voltage: number;
   timestamp?: string;
+  sensorStatus?: Partial<Record<SensorKind, SensorSourceStatus>>;
 }
 
 export interface TelemetryPoint extends SensorSnapshot {
@@ -119,15 +122,44 @@ export interface SensorAlert {
   level: 'info' | 'warning' | 'critical';
   title: string;
   detail: string;
+  sourceLabel?: string;
+}
+
+export interface SensorSourceStatus {
+  metricKey: SensorKind;
+  deviceKey: string;
+  deviceLabel: string;
+  sensorLabel: string;
+  enabled: boolean;
+  state?: string;
+  statusLabel?: string;
+  severity?: SensorSeverity;
+}
+
+export interface DeviceControlState {
+  device1: 0 | 1;
+  device2: 0 | 1;
+  device3: 0 | 1;
+}
+
+export interface DeviceControlStatus extends DeviceControlState {
+  controlFile?: string;
+  topic?: string;
+  published?: boolean;
+  publishError?: string | null;
+  updatedAt?: string | null;
+  reachable: boolean;
 }
 
 interface HomeDataContextType {
   data: HomeData;
   devices: Device[];
+  deviceControl: DeviceControlStatus;
   latestSnapshot: SensorSnapshot;
   sensorHistory: TelemetryPoint[];
   sensorTransport: SensorTransport;
   sensorAlerts: SensorAlert[];
+  updateDeviceControl: (updates: Partial<DeviceControlState>) => Promise<void>;
   toggleDevice: (id: string) => void;
   addDevice: (device: Omit<Device, 'id'>) => void;
   updateDevice: (id: string, updates: Partial<Device>) => void;
@@ -142,6 +174,8 @@ interface BackendSummaryResponse {
   poll_interval_seconds: number;
   stale_after_seconds: number;
   update_count: number;
+  active_sensors?: number;
+  disabled_sensors?: string[];
 }
 
 interface BackendAlertResponse {
@@ -152,6 +186,10 @@ interface BackendAlertResponse {
   key: string;
   value?: number | null;
   unit?: string | null;
+  device_key?: string | null;
+  device_label?: string | null;
+  sensor_label?: string | null;
+  source_label?: string | null;
   created_at: string;
 }
 
@@ -162,18 +200,28 @@ interface BackendRecentSampleResponse {
   light: number;
   voltage: number;
   timestamp: string;
+  sensor_status?: Record<string, unknown>;
+}
+
+interface BackendMetricSnapshot {
+  temperature: number;
+  humidity: number;
+  light: number;
+  voltage: number;
+  timestamp?: string;
+  sensor_status?: Record<string, unknown>;
 }
 
 interface BackendOverviewResponse {
   summary: BackendSummaryResponse;
-  metrics: SensorSnapshot;
+  metrics: BackendMetricSnapshot;
   alerts: BackendAlertResponse[];
   recent_samples: BackendRecentSampleResponse[];
 }
 
 interface BackendRealtimeMessage {
   event: string;
-  snapshot: SensorSnapshot;
+  snapshot: BackendMetricSnapshot;
   alerts: BackendAlertResponse[];
   summary: BackendSummaryResponse;
   recent_records: BackendRecentSampleResponse[];
@@ -182,6 +230,7 @@ interface BackendRealtimeMessage {
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000').replace(/\/$/, '');
 const DASHBOARD_OVERVIEW_URL = `${API_BASE_URL}/api/dashboard/overview`;
+const DEVICE_CONTROL_URL = `${API_BASE_URL}/api/control/devices`;
 const REALTIME_URL = `${API_BASE_URL.replace(/^http/, 'ws')}/ws/realtime`;
 const SENSOR_RECEIVER_URL = 'http://localhost:8080/sensors.json';
 const MQTT_TOPIC = 'sensors/data';
@@ -190,6 +239,43 @@ const SENSOR_POLL_INTERVAL_MS = 2000;
 const STALE_AFTER_SECONDS = 6;
 const MAX_SENSOR_CHANNELS = 4;
 const HISTORY_LIMIT = 24;
+const DEFAULT_SENSOR_STATUS: Record<SensorKind, SensorSourceStatus> = {
+  temperature: {
+    metricKey: 'temperature',
+    deviceKey: 'device1',
+    deviceLabel: 'Device 1',
+    sensorLabel: 'Temperature',
+    enabled: true,
+  },
+  humidity: {
+    metricKey: 'humidity',
+    deviceKey: 'device2',
+    deviceLabel: 'Device 2',
+    sensorLabel: 'Humidity',
+    enabled: true,
+  },
+  light: {
+    metricKey: 'light',
+    deviceKey: 'device3',
+    deviceLabel: 'Device 3',
+    sensorLabel: 'Light',
+    enabled: true,
+  },
+  voltage: {
+    metricKey: 'voltage',
+    deviceKey: 'device4',
+    deviceLabel: 'Device 4',
+    sensorLabel: 'Voltage',
+    enabled: true,
+  },
+};
+
+const defaultDeviceControl: DeviceControlStatus = {
+  device1: 0,
+  device2: 0,
+  device3: 0,
+  reachable: false,
+};
 
 const initialDevices: Device[] = [
   {
@@ -304,6 +390,122 @@ const toCelsius = (value: number) =>
 const normalizeConnectionState = (value?: string): ConnectionState =>
   value === 'live' || value === 'stale' || value === 'offline' ? value : 'offline';
 
+const coerceSensorEnabled = (value: unknown): boolean => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return value !== 0;
+  }
+  if (typeof value === 'string') {
+    return !['0', 'false', 'off', 'disabled', 'no'].includes(value.trim().toLowerCase());
+  }
+  return Boolean(value);
+};
+
+const normalizeSensorStatus = (
+  payload?: Record<string, unknown>,
+): Partial<Record<SensorKind, SensorSourceStatus>> => {
+  const normalized: Partial<Record<SensorKind, SensorSourceStatus>> = {};
+
+  (Object.keys(DEFAULT_SENSOR_STATUS) as SensorKind[]).forEach((metricKey) => {
+    const rawStatus = payload?.[metricKey];
+    const status = typeof rawStatus === 'object' && rawStatus !== null
+      ? rawStatus as Record<string, unknown>
+      : {};
+
+    normalized[metricKey] = {
+      ...DEFAULT_SENSOR_STATUS[metricKey],
+      deviceKey: typeof status.device_key === 'string' ? status.device_key : DEFAULT_SENSOR_STATUS[metricKey].deviceKey,
+      deviceLabel: typeof status.device_label === 'string' ? status.device_label : DEFAULT_SENSOR_STATUS[metricKey].deviceLabel,
+      sensorLabel: typeof status.sensor_label === 'string' ? status.sensor_label : DEFAULT_SENSOR_STATUS[metricKey].sensorLabel,
+      enabled: typeof status.enabled === 'boolean' ? status.enabled : DEFAULT_SENSOR_STATUS[metricKey].enabled,
+      state: typeof status.state === 'string' ? status.state : undefined,
+      statusLabel: typeof status.status_label === 'string' ? status.status_label : undefined,
+      severity:
+        status.severity === 'healthy' || status.severity === 'warning' || status.severity === 'critical'
+          ? status.severity
+          : undefined,
+    };
+  });
+
+  return normalized;
+};
+
+const normalizeSensorStatusFromRawPayload = (
+  payload: Record<string, unknown>,
+): Partial<Record<SensorKind, SensorSourceStatus>> => {
+  const statusPayload = typeof payload.sensor_status === 'object' && payload.sensor_status !== null
+    ? payload.sensor_status as Record<string, unknown>
+    : undefined;
+  const normalized = normalizeSensorStatus(statusPayload);
+  const enabledPayload = typeof payload.sensor_enabled === 'object' && payload.sensor_enabled !== null
+    ? payload.sensor_enabled as Record<string, unknown>
+    : undefined;
+  const disabledSensors = Array.isArray(payload.disabled_sensors)
+    ? payload.disabled_sensors.map((item) => String(item).toLowerCase())
+    : [];
+
+  (Object.keys(DEFAULT_SENSOR_STATUS) as SensorKind[]).forEach((metricKey) => {
+    const current = normalized[metricKey] ?? DEFAULT_SENSOR_STATUS[metricKey];
+    const deviceKey = DEFAULT_SENSOR_STATUS[metricKey].deviceKey;
+    const enabledValue = enabledPayload?.[metricKey] ?? enabledPayload?.[deviceKey];
+    const enabled = enabledValue === undefined
+      ? !disabledSensors.includes(metricKey) && !disabledSensors.includes(deviceKey)
+      : coerceSensorEnabled(enabledValue);
+
+    normalized[metricKey] = {
+      ...current,
+      enabled,
+    };
+  });
+
+  return normalized;
+};
+
+const normalizeBackendSnapshot = (snapshot: BackendMetricSnapshot): SensorSnapshot => ({
+  temperature: snapshot.temperature,
+  humidity: snapshot.humidity,
+  light: snapshot.light,
+  voltage: snapshot.voltage,
+  timestamp: snapshot.timestamp,
+  sensorStatus: normalizeSensorStatus(snapshot.sensor_status),
+});
+
+const applySensorSourceStatus = (
+  card: SensorCardData,
+  status?: SensorSourceStatus,
+): SensorCardData => {
+  const resolvedStatus = status ?? DEFAULT_SENSOR_STATUS[card.id];
+  const sourceLabel = `${resolvedStatus.deviceLabel} · ${card.sourceLabel}`;
+
+  if (!resolvedStatus.enabled) {
+    return {
+      ...card,
+      unit: '',
+      displayValue: 'OFF',
+      statusLabel: 'Disabled',
+      helperText: 'Disabled',
+      rangeLabel: 'Sensor disabled',
+      fillPercent: 0,
+      severity: 'warning',
+      sourceLabel,
+      deviceLabel: resolvedStatus.deviceLabel,
+      enabled: false,
+    };
+  }
+
+  return {
+    ...card,
+    statusLabel: resolvedStatus.statusLabel ?? card.statusLabel,
+    severity: resolvedStatus.severity ?? card.severity,
+    helperText: resolvedStatus.statusLabel ?? card.helperText,
+    sourceLabel,
+    deviceLabel: resolvedStatus.deviceLabel,
+    enabled: true,
+  };
+};
+
 const parseReceiverTimestamp = (timestamp?: string) => {
   if (!timestamp) {
     return null;
@@ -414,9 +616,9 @@ function buildTemperatureCard(value: number): SensorCardData {
       value,
       displayValue: value.toFixed(1),
       description: 'Ambient air around the ESP32 node.',
-      statusLabel: 'Cool',
-      helperText: 'Below the preferred comfort band. Check drafts or sensor placement.',
-      rangeLabel: unit === '°F' ? 'Target 68-79°F' : 'Target 20-26°C',
+      statusLabel: 'Low',
+      helperText: 'Low',
+      rangeLabel: unit === '°F' ? 'Range 68-79°F' : 'Range 20-26°C',
       fillPercent,
       severity: 'warning',
       sourceLabel: 'DHT sensor · MQTT temperature field',
@@ -431,9 +633,9 @@ function buildTemperatureCard(value: number): SensorCardData {
       value,
       displayValue: value.toFixed(1),
       description: 'Ambient air around the ESP32 node.',
-      statusLabel: 'Hot',
-      helperText: 'Above the safe comfort band. Reduce heat buildup or add ventilation.',
-      rangeLabel: unit === '°F' ? 'Target 68-79°F' : 'Target 20-26°C',
+      statusLabel: 'High',
+      helperText: 'High',
+      rangeLabel: unit === '°F' ? 'Range 68-79°F' : 'Range 20-26°C',
       fillPercent,
       severity: 'critical',
       sourceLabel: 'DHT sensor · MQTT temperature field',
@@ -448,9 +650,9 @@ function buildTemperatureCard(value: number): SensorCardData {
       value,
       displayValue: value.toFixed(1),
       description: 'Ambient air around the ESP32 node.',
-      statusLabel: 'Warm',
-      helperText: 'Slightly elevated. Watch this during longer runs or direct sun exposure.',
-      rangeLabel: unit === '°F' ? 'Target 68-79°F' : 'Target 20-26°C',
+      statusLabel: 'High',
+      helperText: 'High',
+      rangeLabel: unit === '°F' ? 'Range 68-79°F' : 'Range 20-26°C',
       fillPercent,
       severity: 'warning',
       sourceLabel: 'DHT sensor · MQTT temperature field',
@@ -465,8 +667,8 @@ function buildTemperatureCard(value: number): SensorCardData {
     displayValue: value.toFixed(1),
     description: 'Ambient air around the ESP32 node.',
     statusLabel: 'Stable',
-    helperText: 'Inside the expected operating band for a room monitor.',
-    rangeLabel: unit === '°F' ? 'Target 68-79°F' : 'Target 20-26°C',
+    helperText: 'Stable',
+    rangeLabel: unit === '°F' ? 'Range 68-79°F' : 'Range 20-26°C',
     fillPercent,
     severity: 'healthy',
     sourceLabel: 'DHT sensor · MQTT temperature field',
@@ -484,9 +686,9 @@ function buildHumidityCard(value: number): SensorCardData {
       value,
       displayValue: value.toFixed(1),
       description: 'Relative moisture reported by the DHT sensor.',
-      statusLabel: 'Dry',
-      helperText: 'Below the preferred range. Check airflow or nearby heat sources.',
-      rangeLabel: 'Target 40-60%',
+      statusLabel: 'Low',
+      helperText: 'Low',
+      rangeLabel: 'Range 40-60%',
       fillPercent,
       severity: 'warning',
       sourceLabel: 'DHT sensor · MQTT humidity field',
@@ -502,8 +704,8 @@ function buildHumidityCard(value: number): SensorCardData {
       displayValue: value.toFixed(1),
       description: 'Relative moisture reported by the DHT sensor.',
       statusLabel: 'High',
-      helperText: 'Moisture is elevated. Check airflow before condensation becomes a risk.',
-      rangeLabel: 'Target 40-60%',
+      helperText: 'High',
+      rangeLabel: 'Range 40-60%',
       fillPercent,
       severity: 'critical',
       sourceLabel: 'DHT sensor · MQTT humidity field',
@@ -518,9 +720,9 @@ function buildHumidityCard(value: number): SensorCardData {
       value,
       displayValue: value.toFixed(1),
       description: 'Relative moisture reported by the DHT sensor.',
-      statusLabel: 'Humid',
-      helperText: 'Slightly above target. Watch for a sustained upward trend.',
-      rangeLabel: 'Target 40-60%',
+      statusLabel: 'High',
+      helperText: 'High',
+      rangeLabel: 'Range 40-60%',
       fillPercent,
       severity: 'warning',
       sourceLabel: 'DHT sensor · MQTT humidity field',
@@ -535,8 +737,8 @@ function buildHumidityCard(value: number): SensorCardData {
     displayValue: value.toFixed(1),
     description: 'Relative moisture reported by the DHT sensor.',
     statusLabel: 'Balanced',
-    helperText: 'Within the preferred moisture band.',
-    rangeLabel: 'Target 40-60%',
+    helperText: 'Balanced',
+    rangeLabel: 'Range 40-60%',
     fillPercent,
     severity: 'healthy',
     sourceLabel: 'DHT sensor · MQTT humidity field',
@@ -555,7 +757,7 @@ function buildLightCard(value: number): SensorCardData {
       displayValue: value.toFixed(1),
       description: 'Relative light intensity normalized to 0-100.',
       statusLabel: 'Low',
-      helperText: 'Illumination is weak. Confirm the sensor is not obstructed.',
+      helperText: 'Low',
       rangeLabel: 'Relative range 30-80%',
       fillPercent,
       severity: 'warning',
@@ -571,8 +773,8 @@ function buildLightCard(value: number): SensorCardData {
       value,
       displayValue: value.toFixed(1),
       description: 'Relative light intensity normalized to 0-100.',
-      statusLabel: 'Saturated',
-      helperText: 'Very bright input. Check for direct glare or sensor saturation.',
+      statusLabel: 'High',
+      helperText: 'High',
       rangeLabel: 'Relative range 30-80%',
       fillPercent,
       severity: 'critical',
@@ -588,8 +790,8 @@ function buildLightCard(value: number): SensorCardData {
       value,
       displayValue: value.toFixed(1),
       description: 'Relative light intensity normalized to 0-100.',
-      statusLabel: 'Bright',
-      helperText: 'Above the normal band. Verify this is expected for the deployment area.',
+      statusLabel: 'High',
+      helperText: 'High',
       rangeLabel: 'Relative range 30-80%',
       fillPercent,
       severity: 'warning',
@@ -605,7 +807,7 @@ function buildLightCard(value: number): SensorCardData {
     displayValue: value.toFixed(1),
     description: 'Relative light intensity normalized to 0-100.',
     statusLabel: 'Balanced',
-    helperText: 'Lighting is inside the expected operating band.',
+    helperText: 'Balanced',
     rangeLabel: 'Relative range 30-80%',
     fillPercent,
     severity: 'healthy',
@@ -622,8 +824,8 @@ function buildVoltageCard(value: number): SensorCardData {
       value,
       displayValue: value.toFixed(0),
       description: 'The firmware is publishing the raw ADC count, not a converted voltage.',
-      statusLabel: 'Raw Feed',
-      helperText: 'Treat this as an unscaled analog reading until the firmware converts it to volts.',
+      statusLabel: 'Raw',
+      helperText: 'Raw',
       rangeLabel: 'Unscaled 0-4095',
       fillPercent: clamp((value / 4095) * 100, 0, 100),
       severity: 'warning',
@@ -641,8 +843,8 @@ function buildVoltageCard(value: number): SensorCardData {
       value,
       displayValue: value.toFixed(2),
       description: 'Supply rail reported by the mock or converted node feed.',
-      statusLabel: 'Low Rail',
-      helperText: 'Supply is below the preferred floor. Inspect the power source first.',
+      statusLabel: 'Low',
+      helperText: 'Low',
       rangeLabel: 'Nominal 3.0-3.6V',
       fillPercent,
       severity: 'critical',
@@ -658,8 +860,8 @@ function buildVoltageCard(value: number): SensorCardData {
       value,
       displayValue: value.toFixed(2),
       description: 'Supply rail reported by the mock or converted node feed.',
-      statusLabel: 'High Rail',
-      helperText: 'Supply is above the preferred band. Verify the regulator and source.',
+      statusLabel: 'High',
+      helperText: 'High',
       rangeLabel: 'Nominal 3.0-3.6V',
       fillPercent,
       severity: 'critical',
@@ -667,7 +869,7 @@ function buildVoltageCard(value: number): SensorCardData {
     };
   }
 
-  if (value < 3.0 || value > 3.6) {
+  if (value < 3.0) {
     return {
       id: 'voltage',
       label: 'Voltage',
@@ -675,8 +877,25 @@ function buildVoltageCard(value: number): SensorCardData {
       value,
       displayValue: value.toFixed(2),
       description: 'Supply rail reported by the mock or converted node feed.',
-      statusLabel: 'Watch',
-      helperText: 'Slightly outside nominal. Watch for drift over the next cycles.',
+      statusLabel: 'Low',
+      helperText: 'Low',
+      rangeLabel: 'Nominal 3.0-3.6V',
+      fillPercent,
+      severity: 'warning',
+      sourceLabel: 'Voltage channel · converted reading',
+    };
+  }
+
+  if (value > 3.6) {
+    return {
+      id: 'voltage',
+      label: 'Voltage',
+      unit: 'V',
+      value,
+      displayValue: value.toFixed(2),
+      description: 'Supply rail reported by the mock or converted node feed.',
+      statusLabel: 'High',
+      helperText: 'High',
       rangeLabel: 'Nominal 3.0-3.6V',
       fillPercent,
       severity: 'warning',
@@ -691,8 +910,8 @@ function buildVoltageCard(value: number): SensorCardData {
     value,
     displayValue: value.toFixed(2),
     description: 'Supply rail reported by the mock or converted node feed.',
-    statusLabel: 'Nominal',
-    helperText: 'Power delivery is steady.',
+    statusLabel: 'Stable',
+    helperText: 'Stable',
     rangeLabel: 'Nominal 3.0-3.6V',
     fillPercent,
     severity: 'healthy',
@@ -707,6 +926,8 @@ function buildSensorSummary(
   ageSeconds: number | null,
 ): SensorSummary {
   const flaggedSensors = sensors.filter((sensor) => sensor.severity !== 'healthy');
+  const activeSensorCount = sensors.filter((sensor) => sensor.enabled !== false).length;
+  const disabledSensors = sensors.filter((sensor) => sensor.enabled === false);
   const lastUpdatedLabel = formatTimestampLabel(timestamp);
 
   if (connectionState === 'offline') {
@@ -729,7 +950,7 @@ function buildSensorSummary(
   if (connectionState === 'stale') {
     return {
       maxSensors: MAX_SENSOR_CHANNELS,
-      activeSensors: MAX_SENSOR_CHANNELS,
+      activeSensors: activeSensorCount,
       online: true,
       state: 'stale',
       lastUpdatedLabel,
@@ -746,7 +967,7 @@ function buildSensorSummary(
   if (flaggedSensors.length === 0) {
     return {
       maxSensors: MAX_SENSOR_CHANNELS,
-      activeSensors: MAX_SENSOR_CHANNELS,
+      activeSensors: activeSensorCount,
       online: true,
       state: 'live',
       lastUpdatedLabel,
@@ -762,13 +983,19 @@ function buildSensorSummary(
 
   return {
     maxSensors: MAX_SENSOR_CHANNELS,
-    activeSensors: MAX_SENSOR_CHANNELS,
+    activeSensors: activeSensorCount,
     online: true,
     state: 'live',
     lastUpdatedLabel,
     freshnessLabel: `Live stream · age ${ageSeconds ?? 0}s`,
-    headline: `${flaggedSensors.length} of ${MAX_SENSOR_CHANNELS} channels need attention`,
-    note: 'The product stays compact on purpose. Any abnormal reading should be visible immediately without expanding room or device sections.',
+    headline:
+      disabledSensors.length > 0
+        ? `${activeSensorCount} of ${MAX_SENSOR_CHANNELS} sensor channels active`
+        : `${flaggedSensors.length} of ${MAX_SENSOR_CHANNELS} channels need attention`,
+    note:
+      disabledSensors.length > 0
+        ? 'Disabled sensors remain visible, but backend threshold alerts are skipped for those channels until the device re-enables them.'
+        : 'The product stays compact on purpose. Any abnormal reading should be visible immediately without expanding room or device sections.',
     watchlist: flaggedSensors.map((sensor) => `${sensor.label}: ${sensor.helperText}`),
   };
 }
@@ -786,6 +1013,7 @@ function buildSensorAlerts(
       level: 'critical',
       title: 'Receiver offline',
       detail: 'The frontend cannot reach the backend overview or the fallback receiver feed.',
+      sourceLabel: 'Receiver',
     });
   }
 
@@ -795,6 +1023,7 @@ function buildSensorAlerts(
       level: 'warning',
       title: 'Telemetry stream is stale',
       detail: `The receiver is reachable, but the last packet is ${ageSeconds ?? '?'} seconds old.`,
+      sourceLabel: 'Receiver',
     });
   }
 
@@ -806,8 +1035,12 @@ function buildSensorAlerts(
     alerts.push({
       id: `${sensor.id}-${sensor.severity}`,
       level: sensor.severity === 'critical' ? 'critical' : 'warning',
-      title: `${sensor.label} is ${sensor.statusLabel.toLowerCase()}`,
+      title:
+        sensor.enabled === false
+          ? `${sensor.deviceLabel ?? sensor.label} disabled`
+          : `${sensor.label} is ${sensor.statusLabel.toLowerCase()}`,
       detail: sensor.helperText,
+      sourceLabel: sensor.sourceLabel,
     });
   });
 
@@ -817,6 +1050,7 @@ function buildSensorAlerts(
       level: 'info',
       title: 'Stream healthy',
       detail: 'The receiver is live and all four channels are inside their current watch bands.',
+      sourceLabel: 'All sensors',
     });
   }
 
@@ -883,6 +1117,11 @@ function mapBackendAlerts(alerts: BackendAlertResponse[]): SensorAlert[] {
     level: alert.level,
     title: alert.title,
     detail: alert.detail,
+    sourceLabel:
+      alert.source_label ??
+      (alert.device_label && alert.sensor_label
+        ? `${alert.device_label} · ${alert.sensor_label}`
+        : undefined),
   }));
 }
 
@@ -898,14 +1137,32 @@ function mapBackendSamples(samples: BackendRecentSampleResponse[]): TelemetryPoi
           light: sample.light,
           voltage: sample.voltage,
           timestamp: sample.timestamp,
+          sensorStatus: normalizeSensorStatus(sample.sensor_status),
         },
         sample.sequence,
       ),
     );
 }
 
+function normalizeDeviceControl(payload: Record<string, unknown>): DeviceControlStatus {
+  const normalizeSwitch = (value: unknown): 0 | 1 => (Number(value) === 1 ? 1 : 0);
+
+  return {
+    device1: normalizeSwitch(payload.device1),
+    device2: normalizeSwitch(payload.device2),
+    device3: normalizeSwitch(payload.device3),
+    controlFile: typeof payload.control_file === 'string' ? payload.control_file : undefined,
+    topic: typeof payload.topic === 'string' ? payload.topic : undefined,
+    published: typeof payload.published === 'boolean' ? payload.published : undefined,
+    publishError: typeof payload.publish_error === 'string' ? payload.publish_error : null,
+    updatedAt: typeof payload.updated_at === 'string' ? payload.updated_at : null,
+    reachable: true,
+  };
+}
+
 export function HomeDataProvider({ children }: { children: ReactNode }) {
   const [devices, setDevices] = useState<Device[]>(initialDevices);
+  const [deviceControl, setDeviceControl] = useState<DeviceControlStatus>(defaultDeviceControl);
   const [sensorData, setSensorData] = useState<SensorSnapshot | null>(null);
   const [sensorHistory, setSensorHistory] = useState<TelemetryPoint[]>([]);
   const [hasSuccessfulFetch, setHasSuccessfulFetch] = useState(false);
@@ -926,13 +1183,7 @@ export function HomeDataProvider({ children }: { children: ReactNode }) {
       }
 
       const overview: BackendOverviewResponse = await response.json();
-      const nextSnapshot: SensorSnapshot = {
-        temperature: overview.metrics.temperature,
-        humidity: overview.metrics.humidity,
-        light: overview.metrics.light,
-        voltage: overview.metrics.voltage,
-        timestamp: overview.metrics.timestamp,
-      };
+      const nextSnapshot = normalizeBackendSnapshot(overview.metrics);
 
       setBackendSummary(overview.summary);
       setBackendAlerts(mapBackendAlerts(overview.alerts));
@@ -963,7 +1214,15 @@ export function HomeDataProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const nextData: SensorSnapshot = await response.json();
+        const rawData = await response.json();
+        const nextData: SensorSnapshot = {
+          temperature: Number(rawData.temperature ?? 0),
+          humidity: Number(rawData.humidity ?? 0),
+          light: Number(rawData.light ?? 0),
+          voltage: Number(rawData.voltage ?? 0),
+          timestamp: rawData.timestamp,
+          sensorStatus: normalizeSensorStatusFromRawPayload(rawData),
+        };
         setReceiverReachable(true);
         setHasSuccessfulFetch(true);
         setLastSuccessfulFetchAt(Date.now());
@@ -984,10 +1243,18 @@ export function HomeDataProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const handleConfigUpdated = () => {
+      void fetchSensorData();
+    };
+
+    window.addEventListener('energy-supervisor-config-updated', handleConfigUpdated);
     fetchSensorData();
     const interval = setInterval(fetchSensorData, SENSOR_POLL_INTERVAL_MS);
 
-    return () => clearInterval(interval);
+    return () => {
+      window.removeEventListener('energy-supervisor-config-updated', handleConfigUpdated);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -1001,18 +1268,71 @@ export function HomeDataProvider({ children }: { children: ReactNode }) {
     setHasSuccessfulFetch(true);
     setLastSuccessfulFetchAt(Date.now());
     setLastPollAt(Date.now());
-    setSensorData({
-      temperature: realtimeMessage.snapshot.temperature,
-      humidity: realtimeMessage.snapshot.humidity,
-      light: realtimeMessage.snapshot.light,
-      voltage: realtimeMessage.snapshot.voltage,
-      timestamp: realtimeMessage.snapshot.timestamp,
-    });
+    setSensorData(normalizeBackendSnapshot(realtimeMessage.snapshot));
 
     if (realtimeMessage.recent_records.length > 0) {
       setSensorHistory(mapBackendSamples(realtimeMessage.recent_records));
     }
   }, [realtimeMessage]);
+
+  useEffect(() => {
+    const fetchDeviceControl = async () => {
+      try {
+        const response = await fetch(DEVICE_CONTROL_URL, { cache: 'no-store' });
+
+        if (!response.ok) {
+          throw new Error(`Device control request failed with ${response.status}`);
+        }
+
+        const payload = await response.json();
+        setDeviceControl(normalizeDeviceControl(payload));
+      } catch (error) {
+        setDeviceControl((previous) => ({ ...previous, reachable: false }));
+      }
+    };
+
+    fetchDeviceControl();
+    const interval = setInterval(fetchDeviceControl, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const updateDeviceControl = async (updates: Partial<DeviceControlState>) => {
+    const optimisticState: DeviceControlState = {
+      device1: updates.device1 ?? deviceControl.device1,
+      device2: updates.device2 ?? deviceControl.device2,
+      device3: updates.device3 ?? deviceControl.device3,
+    };
+
+    setDeviceControl((previous) => ({
+      ...previous,
+      ...optimisticState,
+      reachable: true,
+      published: undefined,
+      publishError: null,
+    }));
+
+    try {
+      const response = await fetch(DEVICE_CONTROL_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(optimisticState),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Device control update failed with ${response.status}`);
+      }
+
+      const payload = await response.json();
+      setDeviceControl(normalizeDeviceControl(payload));
+    } catch (error) {
+      setDeviceControl((previous) => ({
+        ...previous,
+        reachable: false,
+        publishError: error instanceof Error ? error.message : 'Device control update failed.',
+      }));
+    }
+  };
 
   const toggleDevice = (id: string) => {
     setDevices((previous) =>
@@ -1061,7 +1381,7 @@ export function HomeDataProvider({ children }: { children: ReactNode }) {
     buildHumidityCard(latestSnapshot.humidity),
     buildLightCard(latestSnapshot.light),
     buildVoltageCard(latestSnapshot.voltage),
-  ];
+  ].map((sensor) => applySensorSourceStatus(sensor, latestSnapshot.sensorStatus?.[sensor.id]));
   const now = lastPollAt;
   const fallbackConnectionState = getConnectionState(
     receiverReachable,
@@ -1079,7 +1399,11 @@ export function HomeDataProvider({ children }: { children: ReactNode }) {
   const comfortLevel =
     temperatureC < 18 ? 'Cool' : temperatureC > 26 ? 'Warm' : 'Comfortable';
   const voltageMode = inferVoltageMode(latestSnapshot.voltage);
-  const sensorAlerts = backendAlerts ?? buildSensorAlerts(sensors, connectionState, ageSeconds);
+  const localSensorAlerts = buildSensorAlerts(sensors, connectionState, ageSeconds);
+  const disabledSensorAlerts = localSensorAlerts.filter((alert) => alert.title.toLowerCase().includes('disabled'));
+  const sensorAlerts = backendAlerts
+    ? [...disabledSensorAlerts, ...backendAlerts].slice(0, 5)
+    : localSensorAlerts;
   const sensorTransport: SensorTransport = {
     receiverUrl:
       backendSummary || realtimeState === 'open'
@@ -1139,10 +1463,12 @@ export function HomeDataProvider({ children }: { children: ReactNode }) {
       value={{
         data,
         devices,
+        deviceControl,
         latestSnapshot,
         sensorHistory,
         sensorTransport,
         sensorAlerts,
+        updateDeviceControl,
         toggleDevice,
         addDevice,
         updateDevice,

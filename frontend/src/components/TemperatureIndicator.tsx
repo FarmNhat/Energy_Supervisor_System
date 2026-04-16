@@ -45,7 +45,7 @@ export function TemperatureIndicator({
                 {current}°
               </span>
               <span className="text-sm text-gray-400 font-medium">
-                Target {target}°
+                Range {target}°
               </span>
             </div>
           </div>

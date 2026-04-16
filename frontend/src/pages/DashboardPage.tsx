@@ -1,10 +1,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { DeviceControlPanel } from '../components/DeviceControlPanel';
 import { SensorCard } from '../components/SensorCard';
 import { useHomeData } from '../hooks/useHomeData';
 
 export function DashboardPage() {
-  const { data } = useHomeData();
+  const { data, deviceControl, updateDeviceControl } = useHomeData();
 
   return (
     <motion.div
@@ -19,6 +20,8 @@ export function DashboardPage() {
           <SensorCard key={sensor.id} sensor={sensor} delay={0.05 * (index + 1)} />
         ))}
       </section>
+
+      <DeviceControlPanel control={deviceControl} onUpdate={updateDeviceControl} />
     </motion.div>
   );
 }

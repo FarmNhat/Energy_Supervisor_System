@@ -1,14 +1,23 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from backend.app.core.security import hash_password, verify_password
 from backend.app.core.settings import get_settings
 from backend.app.db import SessionLocal, get_db
 from backend.app.realtime import build_realtime_message, connection_manager
-from backend.app.schemas import ConfigUpdateRequest, HealthResponse
-from backend.app.services import DashboardService
+from backend.app.repositories import UserRepository
+from backend.app.schemas import (
+    ConfigUpdateRequest,
+    HealthResponse,
+    LoginResponse,
+    UserCreate,
+    UserLogin,
+    UserRead,
+)
+from backend.app.services import DashboardService, TelemetryService
 
 settings = get_settings()
 
@@ -33,9 +42,47 @@ def healthcheck() -> HealthResponse:
     )
 
 
+@api_router.post("/auth/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+def register_user(payload: UserCreate, session: Session = Depends(get_db)) -> UserRead:
+    user_repo = UserRepository(session)
+    existing_user = user_repo.get_by_username(payload.username)
+    if existing_user is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
+
+    user = user_repo.create(payload.username, hash_password(payload.password))
+    return UserRead.model_validate(user)
+
+
+@api_router.post("/auth/login", response_model=LoginResponse)
+def login_user(payload: UserLogin, session: Session = Depends(get_db)) -> LoginResponse:
+    user_repo = UserRepository(session)
+    user = user_repo.get_by_username(payload.username)
+
+    if user is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    return LoginResponse(
+        access_token=f"mock-token-{user.user_id}", user=UserRead.model_validate(user)
+    )
+
+
 @api_router.get("/dashboard/overview")
 def dashboard_overview(limit: int = Query(24, ge=1, le=240), session: Session = Depends(get_db)) -> dict:
     return DashboardService.overview(session, limit=limit)
+
+
+@api_router.post("/telemetry/ingest")
+def ingest_telemetry(payload: dict, session: Session = Depends(get_db)) -> dict:
+    overview = TelemetryService.ingest_payload(session, payload)
+    connection_manager.broadcast_from_thread(
+        build_realtime_message(
+            snapshot=overview["metrics"],
+            alerts=overview["alerts"],
+            summary=overview["summary"],
+            recent_records=overview["recent_samples"],
+        )
+    )
+    return overview
 
 
 @api_router.get("/records/recent")
@@ -70,13 +117,10 @@ def register_routes(app: FastAPI) -> None:
                 overview = DashboardService.overview(session, limit=10)
                 await websocket.send_json(
                     build_realtime_message(
-                        snapshot=overview["snapshot"],
+                        snapshot=overview["metrics"],
                         alerts=overview["alerts"],
-                        summary={
-                            "config_summary": overview["config_summary"],
-                            "latest_metrics": overview["latest_metrics"],
-                        },
-                        recent_records=overview["recent_records"],
+                        summary=overview["summary"],
+                        recent_records=overview["recent_samples"],
                     ).model_dump(mode="json")
                 )
             while True:

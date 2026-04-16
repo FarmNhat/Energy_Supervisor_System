@@ -9,6 +9,12 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U energy -d energy_supervisor"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
   mosquitto:
     image: eclipse-mosquitto:2
@@ -23,15 +29,24 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg://energy:energy@db:5432/energy_supervisor
-      MQTT_BROKER_HOST: broker.hivemq.com
+      # For local development in Docker, use the 'mosquitto' service name.
+      # Change to an external broker (e.g., broker.hivemq.com) for production or real ESP32 testing if needed.
+      MQTT_BROKER_HOST: mosquitto
       MQTT_BROKER_PORT: 1883
       MQTT_TOPIC: sensors/data
+      MQTT_CONTROL_TOPIC: devices/control
+      DEVICE_CONTROL_FILE: /app/iot/web_receiver/input.json
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
     depends_on:
-      - db
-      - mosquitto
+      db:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    restart: unless-stopped
     ports:
       - "8000:8000"
+    volumes:
+      - ../iot/web_receiver:/app/iot/web_receiver
 
 volumes:
   pgdata:
