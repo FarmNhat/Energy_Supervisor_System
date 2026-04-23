@@ -114,6 +114,13 @@ uv venv .venv-iot
 uv pip install --python .venv-iot/bin/python -r iot/requirements.txt
 ```
 
+PowerShell (Windows):
+
+```powershell
+uv venv .venv-iot
+uv pip install --python .venv-iot/Scripts/python.exe -r iot/requirements.txt
+```
+
 Important broker rule:
 
 - Backend container connects to Mosquitto using `MQTT_BROKER_HOST=mosquitto`.
@@ -131,6 +138,13 @@ cd iot/web_receiver
 BROKER=localhost TOPIC=sensors/data uv run --python ../../.venv-iot/bin/python mock_device.py
 ```
 
+PowerShell (Windows):
+
+```powershell
+cd iot/web_receiver
+$env:BROKER="localhost"; $env:TOPIC="sensors/data"; uv run --python ../../.venv-iot/Scripts/python.exe mock_device.py
+```
+
 Test with one or more disabled sensors:
 
 ```bash
@@ -138,11 +152,25 @@ cd iot/web_receiver
 MOCK_DISABLED_SENSORS=humidity BROKER=localhost TOPIC=sensors/data uv run --python ../../.venv-iot/bin/python mock_device.py
 ```
 
+PowerShell (Windows):
+
+```powershell
+cd iot/web_receiver
+$env:MOCK_DISABLED_SENSORS="humidity"; $env:BROKER="localhost"; $env:TOPIC="sensors/data"; uv run --python ../../.venv-iot/Scripts/python.exe mock_device.py
+```
+
 Test rotating disabled sensors:
 
 ```bash
 cd iot/web_receiver
 MOCK_ROTATE_DISABLED=1 BROKER=localhost TOPIC=sensors/data uv run --python ../../.venv-iot/bin/python mock_device.py
+```
+
+PowerShell (Windows):
+
+```powershell
+cd iot/web_receiver
+$env:MOCK_ROTATE_DISABLED="1"; $env:BROKER="localhost"; $env:TOPIC="sensors/data"; uv run --python ../../.venv-iot/Scripts/python.exe mock_device.py
 ```
 
 The mock publisher sends telemetry to:
@@ -196,6 +224,27 @@ cd iot/web_receiver
 BROKER=localhost PORT=1883 TOPIC=sensors/data uv run --python ../../.venv-iot/bin/python json_gen.py
 ```
 
+PowerShell (Windows):
+
+```powershell
+cd iot/web_receiver
+$env:BROKER="localhost"; $env:PORT="1883"; $env:TOPIC="sensors/data"; uv run --python ../../.venv-iot/Scripts/python.exe json_gen.py
+```
+
+Start the local HTTP server that serves `sensors.json` on port `8080`:
+
+```bash
+cd iot/web_receiver
+python server.py
+```
+
+PowerShell (Windows):
+
+```powershell
+cd iot/web_receiver
+python server.py
+```
+
 ## 6. Device Control Test
 
 The frontend device toggles call the backend, and the backend does two things:
@@ -244,6 +293,13 @@ Optional: run the standalone control publisher only if you want to repeatedly pu
 ```bash
 cd iot/web_receiver
 BROKER=localhost PORT=1883 TOPIC=devices/control uv run --python ../../.venv-iot/bin/python mqtt_publish.py
+```
+
+PowerShell (Windows):
+
+```powershell
+cd iot/web_receiver
+$env:BROKER="localhost"; $env:PORT="1883"; $env:TOPIC="devices/control"; uv run --python ../../.venv-iot/Scripts/python.exe mqtt_publish.py
 ```
 
 Normal local development does not need this optional process because the backend already publishes control messages when the dashboard toggles a device.
@@ -299,6 +355,12 @@ On Linux:
 
 ```bash
 hostname -I
+```
+
+On Windows (PowerShell):
+
+```powershell
+ipconfig
 ```
 
 Pick the LAN IP, for example:

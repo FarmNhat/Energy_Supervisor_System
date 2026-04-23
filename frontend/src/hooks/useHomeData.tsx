@@ -232,7 +232,8 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:800
 const DASHBOARD_OVERVIEW_URL = `${API_BASE_URL}/api/dashboard/overview`;
 const DEVICE_CONTROL_URL = `${API_BASE_URL}/api/control/devices`;
 const REALTIME_URL = `${API_BASE_URL.replace(/^http/, 'ws')}/ws/realtime`;
-const SENSOR_RECEIVER_URL = 'http://localhost:8080/sensors.json';
+const SENSOR_RECEIVER_URL = import.meta.env.VITE_SENSOR_RECEIVER_URL ?? '/sensors.json';
+const PREFER_SENSOR_RECEIVER = String(import.meta.env.VITE_PREFER_SENSOR_RECEIVER ?? 'true') === 'true';
 const MQTT_TOPIC = 'sensors/data';
 const MQTT_BROKER_LABEL = 'broker.hivemq.com';
 const SENSOR_POLL_INTERVAL_MS = 2000;
@@ -1198,20 +1199,11 @@ export function HomeDataProvider({ children }: { children: ReactNode }) {
     const fetchSensorData = async () => {
       setLastPollAt(Date.now());
 
-      try {
-        await fetchBackendOverview();
-        return;
-      } catch (error) {
-        setBackendSummary(null);
-        setBackendAlerts(null);
-      }
-
-      try {
+      const fetchReceiverData = async () => {
         const response = await fetch(SENSOR_RECEIVER_URL, { cache: 'no-store' });
 
         if (!response.ok) {
-          setReceiverReachable(false);
-          return;
+          throw new Error(`Receiver request failed with ${response.status}`);
         }
 
         const rawData = await response.json();
@@ -1223,6 +1215,7 @@ export function HomeDataProvider({ children }: { children: ReactNode }) {
           timestamp: rawData.timestamp,
           sensorStatus: normalizeSensorStatusFromRawPayload(rawData),
         };
+
         setReceiverReachable(true);
         setHasSuccessfulFetch(true);
         setLastSuccessfulFetchAt(Date.now());
@@ -1237,8 +1230,27 @@ export function HomeDataProvider({ children }: { children: ReactNode }) {
           const nextPoint = createHistoryPoint(nextData, last ? last.sequence + 1 : 1);
           return [...previous, nextPoint].slice(-HISTORY_LIMIT);
         });
+      };
+
+      const firstFetch = PREFER_SENSOR_RECEIVER ? fetchReceiverData : fetchBackendOverview;
+      const fallbackFetch = PREFER_SENSOR_RECEIVER ? fetchBackendOverview : fetchReceiverData;
+
+      try {
+        await firstFetch();
+        return;
+      } catch (error) {
+        if (PREFER_SENSOR_RECEIVER) {
+          setBackendSummary(null);
+          setBackendAlerts(null);
+        }
+      }
+
+      try {
+        await fallbackFetch();
       } catch (error) {
         setReceiverReachable(false);
+        setBackendSummary(null);
+        setBackendAlerts(null);
         setLastPollAt(Date.now());
       }
     };
