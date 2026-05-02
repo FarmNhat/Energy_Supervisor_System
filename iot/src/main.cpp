@@ -6,11 +6,14 @@
 #include "taskWiFi.h"
 #include "taskMqtt.h"
 #include "taskLCD.h"              // Thêm module LCD
+#include "device_control.h"      // Thêm module điều khiển thiết bị
 
 void setup()
 {
   Serial.begin(115200);
-
+  pinMode (25, OUTPUT);
+  pinMode (26, OUTPUT);
+  pinMode (27, OUTPUT);
   xSensorMutex = xSemaphoreCreateMutex();
   xSerialMutex = xSemaphoreCreateMutex();
   xMqttMutex   = xSemaphoreCreateMutex();
@@ -28,6 +31,7 @@ void setup()
   xTaskCreate(task_WiFi,          "Task WiFi",          4096, NULL, 3, NULL);
   xTaskCreate(task_MQTT,          "Task MQTT",          4096, NULL, 3, NULL);
   xTaskCreate(task_LCD,           "Task LCD",           4096, NULL, 1, NULL); // Thêm LCD task
+  xTaskCreate(task_Device,        "Task Device Control",4096, NULL, 1, NULL); // Thêm Device Control task
 }
 
 void loop() {}
